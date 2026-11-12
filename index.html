@@ -336,6 +336,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
   display: grid; place-items: center; font-size: .75rem; padding: var(--s1); text-align: center;
 }
 .mini-anadir:hover { border-color: var(--denim); color: var(--denim); }
+.mini-anadir svg { width: 22px; height: 22px; display: block; margin: 0 auto 2px; }
+
+/* Fotos en pantallas táctiles: cámara y galería en vez de arrastrar */
+.solo-tactil { display: none; }
+.botones-foto { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.boton.grande { min-height: 56px; font-size: 1rem; white-space: normal; text-align: left; line-height: 1.2; padding: var(--s2) var(--s3); }
+.boton.grande svg { width: 22px; height: 22px; flex: none; }
+@media (pointer: coarse), (max-width: 767.98px) {
+  .solo-tactil { display: grid; gap: var(--s2); }
+  .zona-fotos { display: none; }
+  #previas { justify-content: flex-start; }
+  .previas .mini, .miniaturas .mini, .mini-anadir { width: 80px; height: 100px; }
+}
 .dato-meta { margin: 0 0 var(--s5); }
 .zona-fotos {
   border: 1px dashed var(--line-strong); border-radius: 10px; padding: var(--s5); text-align: center; color: var(--muted);
@@ -386,6 +399,8 @@ body.con-seleccion .principal { padding-bottom: 128px; }
 .aviso.error { background: var(--danger); color: #fff; }
 .aviso .boton { min-height: 32px; background: transparent; color: inherit; border-color: currentColor; }
 @keyframes entra { from { opacity: 0; transform: translateY(8px); } }
+/* Con la ficha abierta, los avisos suben para no tapar el botón de guardar */
+.panel.abierto ~ .avisos { bottom: 80px; }
 
 /* ---------- Conexión ---------- */
 .conexion { min-height: 100vh; display: grid; place-items: center; padding: var(--s5); }
@@ -459,7 +474,7 @@ body.con-seleccion .principal { padding-bottom: 128px; }
   <form class="tarjeta-conexion" id="formConexion" novalidate>
     <span class="tag" aria-hidden="true">XL</span>
     <h1>Armario de casa</h1>
-    <p>Conecta el gestor con tu bot. Solo hace falta la primera vez en este ordenador.</p>
+    <p>Conecta el gestor con tu bot. Solo hace falta la primera vez en este dispositivo.</p>
     <div class="campo">
       <label for="cxUrl">Dirección del bot</label>
       <input type="url" id="cxUrl" required aria-describedby="cxUrlAyuda">
@@ -594,6 +609,19 @@ body.con-seleccion .principal { padding-bottom: 128px; }
     <div id="bloqueSubida" hidden>
       <div class="campo">
         <span class="rotulo" id="rotuloFotos">Fotos</span>
+        <div class="solo-tactil">
+          <div class="botones-foto">
+            <button class="boton primario grande" type="button" id="botonCamara" aria-describedby="fotosAyuda errFotos">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              <span id="textoCamara">Hacer foto</span>
+            </button>
+            <button class="boton grande" type="button" id="botonGaleria" aria-describedby="fotosAyuda">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>
+              Elegir de la galería
+            </button>
+          </div>
+          <span class="ayuda" id="fotosAyuda">Hasta 5 fotos de la misma prenda: delante, detrás, la etiqueta…</span>
+        </div>
         <div class="zona-fotos" id="zonaFotos" tabindex="0" role="button" aria-labelledby="rotuloFotos zonaTexto" aria-describedby="errFotos">
           <strong id="zonaTexto">Arrastra aquí las fotos de la prenda</strong>
           o haz clic para elegirlas. También puedes pegarlas con Ctrl+V. Hasta 5.
@@ -629,6 +657,7 @@ body.con-seleccion .principal { padding-bottom: 128px; }
       <span class="ayuda" id="descAyuda">Opcional. Ayuda a encontrarla al buscar.</span>
     </div>
     <input type="file" id="inputFotos" accept="image/*" multiple hidden>
+    <input type="file" id="inputCamara" accept="image/*" capture="environment" hidden>
   </form>
   <footer>
     <button class="boton peligro" id="botonBorrarPrenda" type="button">Borrar prenda</button>
@@ -1350,7 +1379,7 @@ function cerrarPanel() {
 }
 
 function limpiarErrores() {
-  errorCampo('errFotos', '', [$('zonaFotos')]);
+  errorCampo('errFotos', '', [$('zonaFotos'), $('botonCamara')]);
   errorCampo('errTalla', '', [$('tallaOtra')]);
   errorCampo('errContenedor', '', [$('contenedorNuevo')]);
 }
@@ -1454,10 +1483,19 @@ function pintarGaleria() {
     minis.append(m);
   });
   if (p.fotos.length < MAX_FOTOS) {
-    const a = document.createElement('button');
-    a.type = 'button'; a.className = 'mini-anadir'; a.textContent = 'Añadir foto';
-    a.onclick = () => { $('inputFotos').dataset.destino = 'existente'; $('inputFotos').click(); };
-    minis.append(a);
+    const boton = (texto, icono, modo) => {
+      const a = document.createElement('button');
+      a.type = 'button'; a.className = 'mini-anadir';
+      a.innerHTML = icono + texto;
+      a.onclick = () => pedirFotos('existente', modo);
+      minis.append(a);
+    };
+    if (esTactil()) {
+      boton('Hacer foto', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>', 'camara');
+      boton('Galería', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>', 'galeria');
+    } else {
+      boton('Añadir foto', '', 'galeria');
+    }
   }
 }
 
@@ -1510,12 +1548,29 @@ function pintarPrevias() {
     m.append(q);
     cont.append(m);
   });
+  // Botones de cámara/galería: el texto refleja cuántas fotos llevas
+  const n = estado.subidas.length;
+  $('textoCamara').textContent = n ? 'Hacer otra foto' : 'Hacer foto';
+  $('botonCamara').disabled = n >= MAX_FOTOS;
+  $('botonGaleria').disabled = n >= MAX_FOTOS;
+  $('fotosAyuda').textContent = n >= MAX_FOTOS
+    ? 'Ya tienes las 5 fotos. Quita alguna si quieres cambiarla.'
+    : n ? plural(n, 'foto', 'fotos') + ' de ' + MAX_FOTOS + '. Puedes añadir más de la misma prenda.' : 'Hasta 5 fotos de la misma prenda: delante, detrás, la etiqueta…';
+}
+
+const esTactil = () => window.matchMedia('(pointer: coarse), (max-width: 767.98px)').matches;
+const controlFotos = () => esTactil() ? $('botonCamara') : $('zonaFotos');
+
+// Abre la cámara trasera o la galería; destino: 'nueva' (prenda que se está creando) o 'existente' (ficha abierta)
+function pedirFotos(destino, modo) {
+  estado.destinoFotos = destino;
+  (modo === 'camara' ? $('inputCamara') : $('inputFotos')).click();
 }
 
 async function anadirArchivos(archivos) {
   archivos = [...archivos].filter((f) => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
   if (!archivos.length) return;
-  const destino = $('inputFotos').dataset.destino;
+  const destino = estado.destinoFotos;
   try {
     if (destino === 'existente' && estado.prendaAbierta) {
       const p = estado.prendaAbierta;
@@ -1531,8 +1586,8 @@ async function anadirArchivos(archivos) {
       aviso(plural(fotos.length, 'foto añadida', 'fotos añadidas'));
     } else {
       const libres = MAX_FOTOS - estado.subidas.length;
-      if (archivos.length > libres) errorCampo('errFotos', 'Caben como máximo ' + MAX_FOTOS + ' fotos por prenda. Se han añadido las primeras.', [$('zonaFotos')]);
-      else errorCampo('errFotos', '', [$('zonaFotos')]);
+      if (archivos.length > libres) errorCampo('errFotos', 'Caben como máximo ' + MAX_FOTOS + ' fotos por prenda. Se han añadido las primeras.', [$('zonaFotos'), $('botonCamara')]);
+      else errorCampo('errFotos', '', [$('zonaFotos'), $('botonCamara')]);
       for (const a of archivos.slice(0, libres)) estado.subidas.push(await prepararFoto(a));
       pintarPrevias();
     }
@@ -1546,7 +1601,10 @@ async function guardar(ev) {
   const nuevaCaja = $('contenedorNuevo').value.trim();
   const esNueva = !estado.prendaAbierta;
   let primero = null;
-  if (esNueva && !estado.subidas.length) { errorCampo('errFotos', 'Añade al menos una foto de la prenda.', [$('zonaFotos')]); primero = primero || $('zonaFotos'); }
+  if (esNueva && !estado.subidas.length) {
+    errorCampo('errFotos', esTactil() ? 'Haz al menos una foto de la prenda.' : 'Añade al menos una foto de la prenda.', [$('zonaFotos'), $('botonCamara')]);
+    primero = primero || controlFotos();
+  }
   if (!talla) { errorCampo('errTalla', 'Elige una talla o escribe otra.', [$('tallaOtra')]); primero = primero || $('selectorTalla').querySelector('.chip'); }
   if (esNueva && sel === 'nuevo' && !nuevaCaja) { errorCampo('errContenedor', 'Escribe el nombre del contenedor nuevo.', [$('contenedorNuevo')]); primero = primero || $('contenedorNuevo'); }
   if (primero) { primero.focus(); return; }
@@ -1786,11 +1844,14 @@ document.addEventListener('click', (e) => { if (!$('menuCaja').hidden && !e.targ
 $('estantes').addEventListener('scroll', () => cerrarMenuCaja());
 
 const zona = $('zonaFotos');
-zona.addEventListener('click', () => { $('inputFotos').dataset.destino = 'nueva'; $('inputFotos').click(); });
+zona.addEventListener('click', () => pedirFotos('nueva', 'galeria'));
+$('botonCamara').addEventListener('click', () => pedirFotos('nueva', 'camara'));
+$('botonGaleria').addEventListener('click', () => pedirFotos('nueva', 'galeria'));
+$('inputCamara').addEventListener('change', (e) => { anadirArchivos(e.target.files); e.target.value = ''; });
 zona.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zona.click(); } });
 zona.addEventListener('dragover', (e) => { e.preventDefault(); zona.classList.add('encima'); });
 zona.addEventListener('dragleave', () => zona.classList.remove('encima'));
-zona.addEventListener('drop', (e) => { e.preventDefault(); zona.classList.remove('encima'); $('inputFotos').dataset.destino = 'nueva'; anadirArchivos(e.dataTransfer.files); });
+zona.addEventListener('drop', (e) => { e.preventDefault(); zona.classList.remove('encima'); estado.destinoFotos = 'nueva'; anadirArchivos(e.dataTransfer.files); });
 $('inputFotos').addEventListener('change', (e) => { anadirArchivos(e.target.files); e.target.value = ''; });
 
 document.addEventListener('keydown', (e) => {
@@ -1809,7 +1870,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('paste', (e) => {
   if ($('panel').hidden || $('bloqueSubida').hidden) return;
   const imgs = [...(e.clipboardData?.files || [])];
-  if (imgs.length) { $('inputFotos').dataset.destino = 'nueva'; anadirArchivos(imgs); }
+  if (imgs.length) { estado.destinoFotos = 'nueva'; anadirArchivos(imgs); }
 });
 document.addEventListener('click', (e) => {
   if ($('lateral').classList.contains('abierto') && !e.target.closest('#lateral') && !e.target.closest('#botonMenu')) cerrarLateral();

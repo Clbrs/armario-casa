@@ -1,7 +1,7 @@
 // Service worker del Armario de casa.
 // Guarda la "carcasa" de la app para que abra al instante y sin conexión.
 // Los datos del inventario NO se guardan aquí: siempre se piden al bot (y las fotos van a la caché propia de la app).
-const VERSION = 'armario-v1';
+const VERSION = 'armario-v2';
 const CARCASA = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon.png'];
 
 self.addEventListener('install', (e) => {
